@@ -1,0 +1,83 @@
+#include <Servo.h>
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
+
+Adafruit_ADS1115 ads; // Create an instance of the Adafruit_ADS1115 class
+
+// Pin configuration
+const int servoPin = D0;   // Digital output pin for the servo motor
+int minSensorValue = 65535;  // Initialize with maximum possible value
+int maxSensorValue = 0;
+Servo myServo;
+int servoPosition;
+bool isFlexed = false;
+unsigned long flexReleaseTime = 0;
+unsigned long restTime = 2000;  // Time in milliseconds to stay in current position before returning to rest position
+
+void setup() {
+  Serial.begin(115200);
+  ads.begin();
+  myServo.attach(servoPin);
+  minSensorValue = 65535;
+  maxSensorValue = 0;
+
+  for (int i = 0; i < 50; i++) {
+    int flexValue = ads.readADC_SingleEnded(0);
+
+    // Update minimum and maximum sensor values
+    if (flexValue < minSensorValue) {
+      minSensorValue = flexValue;
+    }
+    if (flexValue > maxSensorValue) {
+      maxSensorValue = flexValue;
+    }
+  }
+}
+
+void loop() {
+  // Read the flex sensor value
+  int flexValue = ads.readADC_SingleEnded(0);
+
+  // Update minimum and maximum sensor values
+  if (flexValue < minSensorValue) {
+    minSensorValue = flexValue;
+  }
+  if (flexValue > maxSensorValue) {
+    maxSensorValue = flexValue;
+  }
+
+  // Map the flex sensor value to servo position
+  servoPosition = map(flexValue, minSensorValue, maxSensorValue, 0, 180);
+
+  // Constrain the servo position within the range of 0 to 180 degrees
+  servoPosition = constrain(servoPosition, 0, 180);
+
+  // Control the servo motor
+  myServo.write(servoPosition);
+
+  // Check if the flex sensor is currently flexed
+  if (flexValue > minSensorValue && flexValue < maxSensorValue) {
+    isFlexed = true;
+    flexReleaseTime = millis();
+  }
+
+  // Check if the flex sensor is released for more than restTime milliseconds
+  if (isFlexed && (millis() - flexReleaseTime >= restTime)) {
+    // Return to the rest position
+    myServo.write(0);
+    isFlexed = false;
+  }
+
+  // Print the flex sensor value, minimum value, maximum value, and servo position for debugging
+  Serial.print("Flex Value: ");
+  Serial.print(flexValue);
+  Serial.print("   Min Value: ");
+  Serial.print(minSensorValue);
+  Serial.print("   Max Value: ");
+  Serial.print(maxSensorValue);
+  Serial.print("   Servo Position: ");
+  Serial.println(servoPosition);
+
+  // Delay for stability (adjust as needed)
+  delay(100);
+}
